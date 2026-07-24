@@ -30,6 +30,9 @@ def index():
     return render_template("index.html", sample_text=SAMPLE_TEXT)
 
 
+MAX_DEMO_CHARS = 20_000  # keeps processing time reasonable on free-tier compute
+
+
 @app.route("/redact", methods=["POST"])
 def do_redact():
     text = request.form.get("text", "").strip()
@@ -41,6 +44,14 @@ def do_redact():
     if not text:
         return render_template("index.html", sample_text=SAMPLE_TEXT,
                                 error="Please paste some text or upload a .txt file.")
+
+    if len(text) > MAX_DEMO_CHARS:
+        return render_template(
+            "index.html", sample_text=SAMPLE_TEXT,
+            error=(f"This live demo is capped at {MAX_DEMO_CHARS:,} characters "
+                   f"(yours was {len(text):,}) to keep processing fast on free-tier "
+                   f"hosting. For full documents, run the CLI tool locally: "
+                   f"python3 redact.py input.txt output.txt — see the GitHub repo."))
 
     spans = detect_all(text)
     counts = Counter(s.category for s in spans)
