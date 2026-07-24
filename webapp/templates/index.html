@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PII Redaction Tool — Demo</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>PII Redaction Tool</h1>
+      <p>Regex + spaCy NER pipeline. Paste text or upload a .txt file — nothing is stored.</p>
+    </header>
+
+    <form class="card" action="/redact" method="post" enctype="multipart/form-data">
+      <label for="text">Text to redact</label>
+      <textarea name="text" id="text">{{ sample_text }}</textarea>
+
+      <label for="file" style="margin-top:16px;">...or upload a .txt file instead</label>
+      <input type="file" name="file" id="file" accept=".txt" />
+
+      {% if error %}
+        <div class="error">{{ error }}</div>
+      {% endif %}
+
+      <div class="row">
+        <button type="submit">Redact</button>
+        <span class="privacy-note">Processed in memory only — not saved or logged.</span>
+      </div>
+    </form>
+
+    <footer>Source: detectors.py + engine.py — see the GitHub repo for full code and evaluation report.</footer>
+  </div>
+</body>
+</html>

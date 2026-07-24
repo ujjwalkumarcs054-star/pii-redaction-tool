@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Redacted Output — PII Redaction Tool</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Redacted Output</h1>
+      <p>Every detected value below was replaced with a consistent fake alternative.</p>
+    </header>
+
+    <div class="card">
+      <div class="summary">
+        <span class="num">{{ total }}</span>
+        <span>PII instance{{ 's' if total != 1 else '' }} redacted across {{ category_rows|length }} categor{{ 'ies' if category_rows|length != 1 else 'y' }}</span>
+      </div>
+
+      {% if category_rows %}
+      <table class="counts">
+        <thead>
+          <tr><th>Category</th><th>Count</th></tr>
+        </thead>
+        <tbody>
+          {% for category, count in category_rows %}
+          <tr>
+            <td><span class="badge">{{ category }}</span></td>
+            <td>{{ count }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+        <p style="color: var(--muted);">No PII detected in the provided text.</p>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <label>Redacted text</label>
+      <pre class="redacted">{{ redacted_text }}</pre>
+    </div>
+
+    <div class="row">
+      <a href="/"><button type="button">← Try another</button></a>
+    </div>
+
+    <footer>Source: detectors.py + engine.py — see the GitHub repo for full code and evaluation report.</footer>
+  </div>
+</body>
+</html>
