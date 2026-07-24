@@ -78,9 +78,19 @@ class FakeValueFactory:
                    "Taylor", "Jordan", "Morgan", "Casey", "Riley"]
     LAST_NAMES = ["Doe", "Parker", "Smith", "Johnson", "Lee", "Brown",
                   "Wilson", "Clark", "Walker", "Hall", "Young", "Allen"]
-    COMPANY_NAMES = ["Acme Corp", "Globex Inc", "Initech LLC", "Umbrella Ltd",
-                     "Stark Industries", "Wayne Enterprises", "Hooli Inc",
-                     "Soylent Corp", "Vandelay Industries", "Wonka Ltd"]
+    # A flat list of 10 fake companies collides constantly on a document
+    # with hundreds of unique real companies (every real company beyond the
+    # 10th reuses an earlier fake name once the cycle wraps). Build a much
+    # larger pool combinatorially instead -- prefix x suffix gives 15 x 10
+    # = 150 distinct fake company names, so collisions are far rarer on
+    # large documents.
+    COMPANY_PREFIXES = ["Acme", "Globex", "Initech", "Umbrella", "Stark",
+                        "Wayne", "Hooli", "Soylent", "Vandelay", "Wonka",
+                        "Massive Dynamic", "Cyberdyne", "Oceanic", "Sirius",
+                        "Waystar"]
+    COMPANY_SUFFIXES = ["Corp", "Inc", "LLC", "Ltd", "Industries",
+                        "Enterprises", "Holdings", "Group", "Solutions",
+                        "Partners"]
     STREETS = ["Maple Street", "Oak Avenue", "Elm Road", "Cedar Lane",
                "Birch Boulevard", "Pine Drive"]
     CITIES = ["Springfield", "Rivertown", "Fairview", "Lakeside", "Millbrook"]
@@ -88,10 +98,19 @@ class FakeValueFactory:
     def __init__(self, seed: int = 42):
         self._rng = random.Random(seed)
         self._map: dict[tuple[str, str], str] = {}
+        # category -> list of normalized keys already assigned a fake value,
+        # in the order first seen. Used by _resolve_canonical to catch a
+        # later mention of the *same* real-world entity that NER (or the
+        # address regex) happened to extract with slightly different
+        # boundaries, so it reuses the earlier fake value instead of
+        # minting a new one.
+        self._canonical_keys: dict[str, list[str]] = {}
         self._name_cycle = itertools.cycle(
             [f"{f} {l}" for f in self.FIRST_NAMES for l in self.LAST_NAMES]
         )
-        self._company_cycle = itertools.cycle(self.COMPANY_NAMES)
+        self._company_cycle = itertools.cycle(
+            [f"{p} {s}" for p in self.COMPANY_PREFIXES for s in self.COMPANY_SUFFIXES]
+        )
         self._addr_cycle = itertools.cycle(
             [f"{n} {s}, {c}" for n in range(100, 999, 37)
              for s in self.STREETS for c in self.CITIES]
@@ -100,8 +119,55 @@ class FakeValueFactory:
     def _norm(self, value: str) -> str:
         return " ".join(value.strip().lower().split())
 
+    @staticmethod
+    def _address_core(norm_value: str) -> str:
+        # The door-number-and-street segment (everything before the first
+        # comma) reliably identifies the same physical address even when
+        # the address regex captured a different amount of trailing
+        # city/state/PIN text on different hits of the same real address.
+        return norm_value.split(",")[0].strip()
+
+    def _resolve_canonical(self, category: str, norm_value: str) -> str:
+        """Map a normalized real value to a stable cache key for this
+        category, reusing a previously-seen key when the new value is very
+        likely the same real-world name/company/address, just extracted
+        with slightly different boundaries this time (e.g. "KSH
+        International" vs "KSH International Limited", or the same address
+        with a different amount of trailing text captured)."""
+        seen = self._canonical_keys.setdefault(category, [])
+
+        if category == "ADDRESS":
+            core = self._address_core(norm_value)
+            for existing in seen:
+                if self._address_core(existing) == core:
+                    return existing
+            seen.append(norm_value)
+            return norm_value
+
+        if category in ("FULL_NAME", "COMPANY_NAME"):
+            for existing in seen:
+                if existing == norm_value:
+                    return existing
+                # Whole-word prefix relationship in either direction, e.g.
+                # "ksh international" is a prefix of
+                # "ksh international limited".
+                if (existing.startswith(norm_value + " ")
+                        or norm_value.startswith(existing + " ")):
+                    return existing
+            seen.append(norm_value)
+            return norm_value
+
+        # Other categories (EMAIL, PHONE, SSN, ...) are exact-format PII
+        # with no NER boundary ambiguity -- exact normalized match is
+        # correct and sufficient there.
+        if norm_value not in seen:
+            seen.append(norm_value)
+        return norm_value
+
     def get(self, category: str, real_value: str) -> str:
-        key = (category, self._norm(real_value))
+        norm_value = self._norm(real_value)
+        canonical = self._resolve_canonical(category, norm_value)
+        key = (category, canonical)
         if key in self._map:
             return self._map[key]
 

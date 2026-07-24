@@ -271,6 +271,17 @@ def _clean_ent_text(t: str) -> str:
     return t.strip().strip(",.;:")
 
 
+def _spacy_safe_text(text: str) -> str:
+    """Replace markdown escape backslashes (e.g. "Hegde\\*") with a space,
+    1 character for 1 character, so downstream offsets stay valid.
+    Left as-is, a literal backslash glued directly to a name/word confuses
+    spaCy's tokenizer and can split a multi-token name in two (e.g.
+    "Kushal Subbayya Hegde\\*" gets tokenized so that "Hegde\\*" is cut off
+    from the PERSON entity, leaving a bare surname unredacted elsewhere).
+    """
+    return text.replace("\\", " ")
+
+
 def detect_names_orgs_addresses(text: str, chunk_size: int = 100_000) -> list[Span]:
     """Run spaCy NER over the text in chunks (to respect model max length
     on very large documents) and map entity labels to our categories, then
@@ -284,12 +295,13 @@ def detect_names_orgs_addresses(text: str, chunk_size: int = 100_000) -> list[Sp
     """
     nlp = _get_nlp()
     spans: list[Span] = []
+    clean_text = _spacy_safe_text(text)
 
     for offset in range(0, len(text), chunk_size):
-        chunk = text[offset:offset + chunk_size]
+        chunk = clean_text[offset:offset + chunk_size]
         doc = nlp(chunk)
         for ent in doc.ents:
-            raw = ent.text
+            raw = text[offset + ent.start_char: offset + ent.end_char]
             clean = _clean_ent_text(raw)
             low = clean.lower()
 
@@ -321,11 +333,17 @@ def _propagate_confirmed_entities(text: str, spans: list[Span]) -> list[Span]:
     spaCy tags entities sentence-by-sentence, so the same name can be
     recognized in one sentence ("Filed by Ananya Sharma") and missed in
     another ("Customer Ananya Sharma called in") purely because of its
-    position or surrounding grammar. Once a name/company has been confirmed
-    at least once elsewhere in the document, any other *exact, whole-word*
-    occurrence of that same string is almost certainly the same person or
-    company, not a coincidence -- so we add it directly rather than relying
-    on the NER model to catch it again.
+    position or surrounding grammar -- or missed only in an ALL-CAPS
+    variant, since small spaCy models are known to be weaker on all-caps
+    text (e.g. a normal-case "KSH International Limited" gets tagged, but
+    the ALL-CAPS cover-page "KSH INTERNATIONAL LIMITED" does not). Once a
+    name/company has been confirmed at least once elsewhere in the
+    document, any other *exact, whole-word, case-insensitive* occurrence
+    of that same string is almost certainly the same person or company,
+    not a coincidence -- so we add it directly rather than relying on the
+    NER model to catch it again. Matching is deliberately
+    case-INsensitive (unlike a plain re-match) specifically to catch the
+    ALL-CAPS case.
     """
     confirmed: dict[tuple[str, str], str] = {}
     for s in spans:
@@ -336,7 +354,7 @@ def _propagate_confirmed_entities(text: str, spans: list[Span]) -> list[Span]:
     covered = [(s.start, s.end) for s in spans]
     extra: list[Span] = []
     for (category, _low), original in confirmed.items():
-        pattern = re.compile(r"\b" + re.escape(original) + r"\b")
+        pattern = re.compile(r"\b" + re.escape(original) + r"\b", re.IGNORECASE)
         for m in pattern.finditer(text):
             if any(m.start() < e and m.end() > st for st, e in covered):
                 continue
