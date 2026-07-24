@@ -1,0 +1,4 @@
+spacy>=3.7,<4.0
+
+# After installing requirements, download the small English model:
+#   python -m spacy download en_core_web_sm

@@ -1,0 +1,27 @@
+TICKET LOG - CUSTOMER SUPPORT
+
+Ticket #45213 opened by Rashi Patil on 2026-01-04.
+Customer: Rashi Patil, rashi.patil@gmail.com, phone +91 9876543210.
+Rashi works at Bluewave Technologies Pvt Ltd and lives at 42 Lakeview Road, Andheri, Mumbai – 400 069.
+Date of birth on file: DOB 14-03-1990.
+Issue escalated to agent Rohan Dey (rohan.dey@gmail.com, +91 9123456780), employed by Bluewave Technologies Pvt Ltd.
+Server log shows request from IP 192.168.1.55 at time of complaint.
+Payment on file: card number 4111 1111 1111 1111, billing SSN 123-45-6789 provided for identity verification.
+
+Ticket #45214 opened by Meera Iyer on 2026-01-05.
+Contact: meera.iyer88@yahoo.com, mobile +91 9988776655.
+Meera is a senior analyst at Contoso Global Services and resides at 15/2 Palm Grove Society, Kothrud, Pune – 411 038.
+Date of birth: born on 22 July 1985.
+Second contact IP address 10.0.0.23 logged during the session.
+Card ending used for refund: 5500 0000 0000 0004. Reference SSN 456-78-1234 verified with bank.
+
+Ticket #45215 - Order #78542 for 3 units, Ticket Priority: High.
+The order total was $450.00 and the tracking number is TRK-99213456.
+Section 12 of the Refund Policy applies. The Committee reviewed the Annexure A submission.
+No personal information was included in this entry.
+
+Ticket #45216 opened by Devika Rao on 2026-01-07.
+Email: devika.rao@outlook.com. Phone: (022) 6805-2182.
+Devika works at Meridian Analytics Inc, registered office at 7 Cedar Court, Bandra West, Mumbai – 400 050.
+DOB: 05/11/1992. Verification IP: 203.0.113.44.
+Ticket closed by support engineer Karan Bhatt, karan.bhatt@support.co.in.
