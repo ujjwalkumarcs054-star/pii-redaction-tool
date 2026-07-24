@@ -208,6 +208,30 @@ _GENERIC_BLOCKLIST = {
 
 _NAME_SHAPE_RE = re.compile(r"^[A-Z][a-zA-Z.&'-]*(?:\s+[A-Z][a-zA-Z.&'-]*){1,4}$")
 
+
+def _is_name_shaped(clean: str) -> bool:
+    """Unicode-aware replacement for _NAME_SHAPE_RE.
+
+    The original regex only accepted [a-zA-Z], so accented names (Renée,
+    Muñoz, Zoë) failed the shape filter even when spaCy correctly tagged
+    them as PERSON/ORG. This checks the same shape -- 2 to 5 capitalized
+    tokens, each starting with an uppercase letter -- using str.isupper()/
+    isalpha(), which are unicode-aware in Python, instead of a fixed
+    ASCII character class.
+    """
+    tokens = clean.split()
+    if not (2 <= len(tokens) <= 5):
+        return False
+    for tok in tokens:
+        core = tok.strip(".&'-")
+        if not core:
+            return False
+        if not core[0].isupper():
+            return False
+        if not all(ch.isalpha() or ch in ".&'-" for ch in tok):
+            return False
+    return True
+
 # Prospectus/finance-jargon tokens: if ANY token of a candidate name/company
 # entity is one of these common nouns, it is almost certainly a defined
 # legal/financial term ("Bid Amount", "Floor Price"), not a real person or
@@ -273,11 +297,11 @@ def detect_names_orgs_addresses(text: str, chunk_size: int = 100_000) -> list[Sp
                 continue
 
             if ent.label_ == "PERSON":
-                if not _NAME_SHAPE_RE.match(clean):
+                if not _is_name_shaped(clean):
                     continue
                 label = "FULL_NAME"
             elif ent.label_ == "ORG":
-                if not (_ORG_SUFFIX_RE.search(clean) or _NAME_SHAPE_RE.match(clean)):
+                if not (_ORG_SUFFIX_RE.search(clean) or _is_name_shaped(clean)):
                     continue
                 label = "COMPANY_NAME"
             else:
@@ -286,7 +310,39 @@ def detect_names_orgs_addresses(text: str, chunk_size: int = 100_000) -> list[Sp
             start = offset + ent.start_char
             end = start + len(raw)
             spans.append(Span(start, end, raw, label))
+
+    spans.extend(_propagate_confirmed_entities(text, spans))
     return spans
+
+
+def _propagate_confirmed_entities(text: str, spans: list[Span]) -> list[Span]:
+    """Second pass: catch repeated mentions spaCy's per-sentence NER missed.
+
+    spaCy tags entities sentence-by-sentence, so the same name can be
+    recognized in one sentence ("Filed by Ananya Sharma") and missed in
+    another ("Customer Ananya Sharma called in") purely because of its
+    position or surrounding grammar. Once a name/company has been confirmed
+    at least once elsewhere in the document, any other *exact, whole-word*
+    occurrence of that same string is almost certainly the same person or
+    company, not a coincidence -- so we add it directly rather than relying
+    on the NER model to catch it again.
+    """
+    confirmed: dict[tuple[str, str], str] = {}
+    for s in spans:
+        if s.category in ("FULL_NAME", "COMPANY_NAME"):
+            key = (s.category, s.text.lower())
+            confirmed.setdefault(key, s.text)
+
+    covered = [(s.start, s.end) for s in spans]
+    extra: list[Span] = []
+    for (category, _low), original in confirmed.items():
+        pattern = re.compile(r"\b" + re.escape(original) + r"\b")
+        for m in pattern.finditer(text):
+            if any(m.start() < e and m.end() > st for st, e in covered):
+                continue
+            extra.append(Span(m.start(), m.end(), m.group(), category))
+            covered.append((m.start(), m.end()))
+    return extra
 
 
 # Street-address heuristic fallback (catches multi-line mailing addresses
